@@ -1,23 +1,35 @@
 // Configuration object for each website
 const config = {
-  pixel_id: 'YOUR_PIXEL_ID', // Default Pixel ID
-  api_url: 'https://your-api-endpoint.com/api/track', // Default API URL
-  api_key: 'YOUR_API_KEY' // Default API Key
+  pixel_id: 'YOUR_PIXEL_ID',
+  api_url: 'https://your-api-endpoint.com/api/track',
+  api_key: 'YOUR_API_KEY'
 };
 
-// Load configuration dynamically from script tag
+// Load configuration from script tag
 function loadConfig() {
   const scriptTag = document.currentScript || document.querySelector('script[data-tracking-config]');
   if (scriptTag && scriptTag.dataset.trackingConfig) {
     try {
       const dynamicConfig = JSON.parse(scriptTag.dataset.trackingConfig);
       Object.assign(config, dynamicConfig);
-      console.log('Loaded configuration:', { pixel_id: config.pixel_id, api_url: config.api_url, api_key: '***' });
     } catch (error) {
-      console.error('Error parsing tracking config:', error);
+      logError('Error parsing tracking config', { error: error.message });
     }
   } else {
-    console.warn('No tracking config found in script tag');
+    logError('No tracking config found in script tag');
+  }
+}
+
+// Send error logs to backend
+async function logError(message, details = {}) {
+  try {
+    await fetch(config.api_url.replace('/track', '/log-error'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message, details, origin: window.location.origin })
+    });
+  } catch (error) {
+    // Silent fail to avoid infinite loops
   }
 }
 
@@ -37,10 +49,8 @@ if (config.pixel_id !== 'YOUR_PIXEL_ID') {
   fbq('init', config.pixel_id);
   fbq('track', 'PageView');
 } else {
-  console.warn('Pixel ID not provided. Skipping Pixel initialization.');
+  logError('Pixel ID not provided. Skipping Pixel initialization.');
 }
-
-console.log('Tracking script loaded at:', new Date().toISOString());
 
 // Helper function to get cookie
 function getCookieValue(name) {
@@ -49,10 +59,10 @@ function getCookieValue(name) {
   if (value && (name === '_fbp' || name === '_fbc')) {
     const regex = name === '_fbp' ? /^fb\.\d+\.\d+\.\d+$/ : /^fb\.\d+\.\d+\..+$/;
     if (!regex.test(value)) {
-      console.warn(`Invalid ${name} cookie format: ${value}. Regenerating ${name}.`);
+      logError(`Invalid ${name} cookie format`, { value });
       const newValue = name === '_fbp' ? generateFbp() : '';
       if (name === '_fbp') {
-        document.cookie = `${name}=${newValue}; path=/; max-age=7776000; SameSite=Lax; Secure`; // 90 days expiry
+        document.cookie = `${name}=${newValue}; path=/; max-age=7776000; SameSite=Lax; Secure`;
       }
       return newValue;
     } else if (name === '_fbc') {
@@ -61,14 +71,13 @@ function getCookieValue(name) {
         const creationTime = parseInt(fbcParts[2], 10);
         const currentTime = Math.floor(Date.now() / 1000);
         if (isNaN(creationTime) || creationTime < currentTime - 7 * 24 * 60 * 60 || creationTime > currentTime + 60) {
-          console.warn(`Invalid _fbc creationTime: ${creationTime}. Regenerating _fbc.`);
+          logError(`Invalid _fbc creation time`, { creationTime });
           return '';
         }
       }
       return value;
     }
   }
-  console.log(`Retrieved ${name} cookie: ${value || 'none'}`);
   return value;
 }
 
@@ -79,7 +88,6 @@ function generateFbp() {
   const creationTime = Math.floor(Date.now() / 1000);
   const randomNumber = Math.floor(Math.random() * 10000000000);
   const fbp = `${version}.${subdomainIndex}.${creationTime}.${randomNumber}`;
-  console.log('Generated fbp:', fbp);
   return fbp;
 }
 
@@ -89,7 +97,6 @@ function generateFbc(fbclid) {
   const subdomainIndex = 1;
   const creationTime = Math.floor(Date.now() / 1000);
   const fbc = `${version}.${subdomainIndex}.${creationTime}.${fbclid}`;
-  console.log('Generated fbc:', fbc);
   return fbc;
 }
 
@@ -100,12 +107,12 @@ function validateFbp(fbp) {
     const creationTime = parseInt(fbp.split('.')[2], 10);
     const currentTime = Math.floor(Date.now() / 1000);
     if (creationTime < currentTime - 7 * 24 * 60 * 60 || creationTime > currentTime + 60) {
-      console.warn(`Invalid fbp creationTime: ${creationTime}. Regenerating fbp.`);
+      logError('Invalid fbp creation time, generating new fbp', { fbp });
       return generateFbp();
     }
     return fbp;
   }
-  console.warn(`Invalid fbp format: ${fbp}. Regenerating fbp.`);
+  logError('Invalid fbp format, generating new fbp', { fbp });
   return generateFbp();
 }
 
@@ -116,7 +123,7 @@ function validateFbc(fbc, fbclid) {
   if (fbc && fbcRegex.test(fbc)) {
     const creationTime = parseInt(fbc.split('.')[2], 10);
     if (isNaN(creationTime) || creationTime < currentTime - 7 * 24 * 60 * 60 || creationTime > currentTime + 60) {
-      console.warn(`Invalid fbc creationTime: ${creationTime}. Regenerating fbc.`);
+      logError('Invalid fbc creation time, generating new fbc', { fbc });
       return fbclid ? generateFbc(fbclid) : '';
     }
     return fbc;
@@ -129,7 +136,7 @@ function generateEventId(name) {
   return `${name}-${crypto.randomUUID()}`;
 }
 
-// Initialize fbp and fbc once per session
+// Initialize fbp and fbc
 const currentTime = Math.floor(Date.now() / 1000);
 const fbclid = new URLSearchParams(window.location.search).get('fbclid');
 const rawFbp = getCookieValue('_fbp') || generateFbp();
@@ -138,18 +145,16 @@ const fbp = validateFbp(rawFbp);
 const fbc = validateFbc(rawFbc, fbclid);
 const userAgent = navigator.userAgent;
 
-console.log('Initialized cookies:', { fbp, fbc, fbclid });
-
 // Event tracking function
 async function trackEvent(event_name, options = {}) {
   try {
     const { value = null, currency = null, url = null, content_ids = null, content_type = null, content_category = null, custom_data = {} } = options;
     const event_id = generateEventId(event_name);
 
-    // Use current time for event_time, ensuring it's in UTC and valid
+    // Validate event_time
     let event_time = Math.floor(Date.now() / 1000);
     if (event_time < currentTime - 7 * 24 * 60 * 60 || event_time > currentTime + 60) {
-      console.warn(`Invalid event_time for ${event_name}: ${event_time}. Adjusting to current time.`);
+      logError('Invalid event_time, using current time', { event_name, event_time });
       event_time = currentTime;
     }
 
@@ -173,8 +178,6 @@ async function trackEvent(event_name, options = {}) {
       }
     };
 
-    console.log('Preparing to send fetch request for:', event_name, JSON.stringify(payload, null, 2));
-
     if (window.fbq && config.pixel_id !== 'YOUR_PIXEL_ID') {
       fbq('trackCustom', event_name, {
         eventID: event_id,
@@ -185,7 +188,7 @@ async function trackEvent(event_name, options = {}) {
         ...custom_data
       });
     } else {
-      console.warn(`Facebook Pixel not initialized for ${event_name}`);
+      logError('Facebook Pixel not initialized', { event_name });
     }
 
     const response = await fetch(config.api_url, {
@@ -199,15 +202,14 @@ async function trackEvent(event_name, options = {}) {
     if (!response.ok) {
       throw new Error(`Server responded with status: ${response.status}`);
     }
-    console.log(`Event ${event_name} sent to server successfully`);
-  } catch (error) {
-    console.error(`Error in trackEvent for ${event_name}:`, error);
-  }
 
-  if (options.url) {
-    setTimeout(() => {
-      window.location.href = options.url;
-    }, 1000); // Reduced delay for better UX
+    if (url) {
+      setTimeout(() => {
+        window.location.href = url;
+      }, 500); // Reduced delay for better UX
+    }
+  } catch (error) {
+    logError(`Error in trackEvent for ${event_name}`, { error: error.message });
   }
 }
 
@@ -216,7 +218,7 @@ window.addEventListener('DOMContentLoaded', () => {
   try {
     let event_time = Math.floor(Date.now() / 1000);
     if (event_time < currentTime - 7 * 24 * 60 * 60 || event_time > currentTime + 60) {
-      console.warn(`Invalid event_time for PageView: ${event_time}. Adjusting to current time.`);
+      logError('Invalid event_time for PageView, using current time', { event_time });
       event_time = currentTime;
     }
 
@@ -232,8 +234,6 @@ window.addEventListener('DOMContentLoaded', () => {
       },
       custom_data: {}
     };
-
-    console.log('Preparing to send PageView fetch request:', JSON.stringify(payload, null, 2));
 
     if (window.fbq && config.pixel_id !== 'YOUR_PIXEL_ID') {
       fbq('track', 'PageView', { eventID: payload.event_id });
@@ -251,13 +251,12 @@ window.addEventListener('DOMContentLoaded', () => {
         if (!response.ok) {
           throw new Error(`Server responded with status: ${response.status}`);
         }
-        console.log('PageView event sent to server successfully');
       })
       .catch((error) => {
-        console.error('Error sending PageView event to server:', error);
+        logError('Error sending PageView event to server', { error: error.message });
       });
   } catch (error) {
-    console.error('Error in PageView event handler:', error);
+    logError('Error in PageView event handler', { error: error.message });
   }
 });
 
@@ -279,11 +278,10 @@ document.addEventListener('DOMContentLoaded', () => {
               content_type: 'scroll',
               content_category: 'page'
             });
-            console.log(`Tracked Scroll${threshold}Percent at:`, new Date().toISOString());
           }
         });
       } catch (error) {
-        console.error('Error in scroll event handler:', error);
+        logError('Error in scroll event handler', { error: error.message });
       }
     });
 
@@ -302,15 +300,14 @@ document.addEventListener('DOMContentLoaded', () => {
               content_type: 'time',
               content_category: 'page'
             });
-            console.log(`Tracked TimeSpent${threshold}Seconds at:`, new Date().toISOString());
           }
         });
       } catch (error) {
-        console.error('Error in timing event handler:', error);
+        logError('Error in timing event handler', { error: error.message });
       }
     }, 1000);
   } catch (error) {
-    console.error('Error in scroll/timing event handler:', error);
+    logError('Error in scroll/timing event handler', { error: error.message });
   }
 });
 

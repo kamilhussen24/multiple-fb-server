@@ -8,10 +8,10 @@ const rateLimit = require('express-rate-limit');
 
 const app = express();
 
-// Vercel-এর জন্য প্রক্সি সেটিং চালু করা
+// Enable trust proxy for Vercel
 app.set('trust proxy', 1);
 
-// লগিং সেটআপ (Vercel-এর জন্য কনসোল লগ)
+// Setup logging for Vercel
 const logger = winston.createLogger({
   level: 'info',
   format: winston.format.combine(
@@ -23,104 +23,117 @@ const logger = winston.createLogger({
   ]
 });
 
-// clients.json ফাইল লোড করা
+// Load clients from JSON file
 let clients;
 try {
   clients = JSON.parse(fs.readFileSync('backend/src/clients.json', 'utf8'));
-  logger.info('ক্লায়েন্ট ফাইল (clients.json) সফলভাবে লোড হয়েছে', { clientCount: clients.length });
+  logger.info('Successfully loaded clients.json', { clientCount: clients.length });
 } catch (error) {
-  logger.error('ক্লায়েন্ট ফাইল (clients.json) লোড করতে সমস্যা', {
+  logger.error('Failed to load clients.json', {
     error: error.message,
-    solution: 'backend/src/clients.json ফাইলটি চেক করুন। JSON ফরম্যাট ঠিক আছে কিনা দেখুন।'
+    solution: 'Check backend/src/clients.json for valid JSON format.'
   });
   clients = [];
 }
 
-// রেট লিমিট সেটআপ (১৫ মিনিটে ১০০টি রিকোয়েস্ট)
+// Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // ১৫ মিনিট
-  max: 100, // প্রতি IP থেকে ১০০ রিকোয়েস্ট
-  message: 'অনেক বেশি রিকোয়েস্ট পাঠানো হয়েছে। ১৫ মিনিট পর আবার চেষ্টা করুন।'
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  message: 'Too many requests from this IP. Please try again after 15 minutes.'
 });
 
-// মিডলওয়্যার
+// Middleware
 app.use(limiter);
 app.use(express.json());
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin) {
-      logger.warn('কোনো ওয়েবসাইট অরিজিন দেওয়া হয়নি', {
-        solution: 'টেস্টিংয়ের জন্য এটি ঠিক আছে, কিন্তু ওয়েবসাইট থেকে রিকোয়েস্টে অরিজিন থাকা উচিত।'
+      logger.warn('No origin provided in request', {
+        solution: 'This is normal for testing (e.g., Postman). Ensure website requests include an origin.'
       });
       return callback(null, true);
     }
     const client = clients.find(c => c.origin === origin);
     if (client) {
-      logger.info(`ওয়েবসাইট অরিজিন ${origin} অনুমোদিত`, { origin });
+      logger.info(`Origin ${origin} is allowed`, { origin });
       return callback(null, true);
     }
-    logger.error(`ওয়েবসাইট অরিজিন ${origin} অনুমোদিত নয়`, {
-      solution: `clients.json ফাইলে ${origin} যোগ করুন।`
+    logger.error(`Origin ${origin} is not allowed`, {
+      solution: `Add ${origin} to clients.json.`
     });
-    return callback(new Error(`ওয়েবসাইট ${origin} অনুমোদিত নয়। clients.json ফাইলে এটি যোগ করুন।`));
+    return callback(new Error(`Origin ${origin} is not allowed. Add it to clients.json.`));
   },
   methods: ['POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'X-API-Key']
 }));
 
-// রিকোয়েস্ট লগিং
+// Request logging
 app.use((req, res, next) => {
-  const origin = req.headers.origin || 'জানা নেই';
-  const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || 'জানা নেই';
-  const userAgent = req.headers['user-agent'] || 'জানা নেই';
+  const origin = req.headers.origin || 'unknown';
+  const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
+  const userAgent = req.headers['user-agent'] || 'unknown';
 
-  logger.info(`নতুন রিকোয়েস্ট পাওয়া গেছে: ${req.method} ${req.url}`, {
+  logger.info(`Received request: ${req.method} ${req.url}`, {
     origin,
     clientIp,
     userAgent
   });
 
-  // বট চেক
+  // Bot detection
   if (userAgent.toLowerCase().includes('bot') || userAgent.toLowerCase().includes('crawler')) {
-    logger.warn('বট শনাক্ত হয়েছে, রিকোয়েস্ট ব্লক করা হলো', { userAgent, origin, clientIp });
-    return res.status(400).json({ error: 'বট শনাক্ত হয়েছে। রিকোয়েস্ট ব্লক করা হয়েছে।' });
+    logger.warn('Bot detected, request blocked', { userAgent, origin, clientIp });
+    return res.status(400).json({ error: 'Bot detected. Request blocked.' });
   }
 
   next();
 });
 
-// ইভেন্ট ট্র্যাকিং এন্ডপয়েন্ট
-app.post('/api/track', async (req, res) => {
-  const origin = req.headers.origin || 'জানা নেই';
-  const apiKey = req.headers['x-api-key'] || null;
-  const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || 'জানা নেই';
+// Error logging endpoint for client-side errors
+app.post('/api/log-error', (req, res) => {
+  const { message, details, event_name, origin } = req.body;
+  logger.error('Client-side error reported', {
+    message,
+    details,
+    event_name: event_name || 'unknown',
+    origin: origin || req.headers.origin || 'unknown',
+    clientIp: req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown'
+  });
+  res.status(200).json({ status: 'Error logged' });
+});
 
-  // রিকোয়েস্টের তথ্য লগ করা
-  logger.info('/api/track রিকোয়েস্ট প্রক্রিয়া শুরু', {
+// Track event endpoint
+app.post('/api/track', async (req, res) => {
+  const origin = req.headers.origin || 'unknown';
+  const apiKey = req.headers['x-api-key'] || null;
+  const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
+
+  // Log request details
+  logger.info('Processing /api/track request', {
     origin,
-    apiKey: apiKey ? 'দেওয়া হয়েছে' : 'দেওয়া হয়নি',
+    apiKey: apiKey ? 'provided' : 'missing',
     clientIp,
     requestBody: req.body
   });
 
-  // API কী এবং অরিজিন যাচাই
+  // Validate API key and origin
   let pixel_id, access_token;
   try {
     const clientConfig = getClientConfig(origin, apiKey);
     pixel_id = clientConfig.pixel_id;
     access_token = clientConfig.access_token;
-    logger.info(`ক্লায়েন্ট কনফিগারেশন ঠিক আছে`, { origin, pixel_id });
+    logger.info('Client configuration validated', { origin, pixel_id });
   } catch (error) {
-    logger.error('ক্লায়েন্ট কনফিগারেশনে সমস্যা', {
+    logger.error('Client configuration error', {
       error: error.message,
       origin,
       apiKey,
-      solution: 'clients.json ফাইলে অরিজিন এবং API কী ঠিক আছে কিনা চেক করুন।'
+      solution: 'Verify origin and API key in clients.json.'
     });
     return res.status(403).json({ error: error.message });
   }
 
-  // রিকোয়েস্ট থেকে ডেটা নেওয়া
+  // Extract request data
   const {
     event_name,
     event_source_url,
@@ -130,133 +143,133 @@ app.post('/api/track', async (req, res) => {
     custom_data = {}
   } = req.body;
 
-  // প্রয়োজনীয় ফিল্ড চেক
+  // Validate required fields
   const missingFields = [];
   if (!event_name) missingFields.push('event_name');
   if (!event_source_url) missingFields.push('event_source_url');
   if (!event_id) missingFields.push('event_id');
   if (!event_time) missingFields.push('event_time');
   if (missingFields.length > 0) {
-    logger.error('প্রয়োজনীয় ফিল্ড মিসিং', {
+    logger.error('Missing required fields', {
       missingFields,
       origin,
       clientIp,
-      solution: 'tracking.js ফাইলে event_name, event_source_url, event_id, event_time পাঠানো হচ্ছে কিনা চেক করুন।'
+      solution: 'Ensure tracking.js sends event_name, event_source_url, event_id, and event_time.'
     });
-    return res.status(400).json({ error: 'প্রয়োজনীয় ফিল্ড মিসিং', missing: missingFields });
+    return res.status(400).json({ error: 'Missing required fields', missing: missingFields });
   }
-  logger.info('সব প্রয়োজনীয় ফিল্ড পাওয়া গেছে', { event_name, event_id, event_source_url, event_time });
+  logger.info('All required fields validated', { event_name, event_id, event_source_url, event_time });
 
-  // ইভেন্ট টাইম যাচাই
+  // Validate event_time
   const currentTime = Math.floor(Date.now() / 1000);
   let validatedEventTime = Number.isInteger(Number(event_time)) ? Number(event_time) : currentTime;
   if (validatedEventTime < currentTime - 7 * 24 * 60 * 60 || validatedEventTime > currentTime + 60) {
-    logger.warn('ইভেন্ট টাইম সঠিক নয়, বর্তমান সময় ব্যবহার করা হচ্ছে', {
+    logger.warn('Invalid event_time, using current time', {
       providedEventTime: event_time,
       adjustedEventTime: currentTime,
       origin
     });
     validatedEventTime = currentTime;
   } else {
-    logger.info('ইভেন্ট টাইম সঠিক', { event_time: validatedEventTime });
+    logger.info('Event time validated', { event_time: validatedEventTime });
   }
 
-  // fbp জেনারেট করা
+  // Helper function to generate fbp
   const generateFbp = () => {
     const version = 'fb';
     const subdomainIndex = 1;
     const creationTime = validatedEventTime;
     const randomNumber = Math.floor(Math.random() * 10000000000);
     const fbp = `${version}.${subdomainIndex}.${creationTime}.${randomNumber}`;
-    logger.info('নতুন fbp তৈরি করা হয়েছে', { fbp, origin });
+    logger.info('Generated new fbp', { fbp, origin });
     return fbp;
   };
 
-  // fbc জেনারেট করা
+  // Helper function to generate fbc
   const generateFbc = (fbclid) => {
     const version = 'fb';
     const subdomainIndex = 1;
     const creationTime = validatedEventTime;
     const fbc = `${version}.${subdomainIndex}.${creationTime}.${fbclid}`;
-    logger.info('নতুন fbc তৈরি করা হয়েছে', { fbc, origin });
+    logger.info('Generated new fbc', { fbc, origin });
     return fbc;
   };
 
-  // user_data যাচাই
+  // Validate user_data
   const validateUserData = (user_data) => {
     if (!user_data || typeof user_data !== 'object') {
-      logger.warn('user_data সঠিক নয়, নতুন fbp তৈরি করা হচ্ছে', { origin });
+      logger.warn('Invalid user_data, generating new fbp', { origin });
       return { fbp: generateFbp(), fbc: '' };
     }
 
     let { fbp = '', fbc = '', fbclid = '' } = user_data;
 
-    // fbp যাচাই
+    // Validate fbp
     const fbpRegex = /^fb\.\d+\.\d+\.\d+$/;
     let validatedFbp = fbp;
     if (typeof fbp === 'string' && fbpRegex.test(fbp)) {
       const creationTime = parseInt(fbp.split('.')[2], 10);
       if (creationTime < currentTime - 7 * 24 * 60 * 60 || creationTime > currentTime + 60) {
-        logger.warn('fbp-এর সময় সঠিক নয়, নতুন fbp তৈরি করা হচ্ছে', { fbp, origin });
+        logger.warn('Invalid fbp creation time, generating new fbp', { fbp, origin });
         validatedFbp = generateFbp();
       } else {
-        logger.info('fbp সঠিক', { fbp });
+        logger.info('fbp validated', { fbp });
       }
     } else {
-      logger.warn('fbp ফরম্যাট সঠিক নয়, নতুন fbp তৈরি করা হচ্ছে', { fbp, origin });
+      logger.warn('Invalid fbp format, generating new fbp', { fbp, origin });
       validatedFbp = generateFbp();
     }
 
-    // fbc যাচাই
+    // Validate fbc
     const fbcRegex = /^fb\.\d+\.\d+\..+$/;
     let validatedFbc = fbc;
     if (typeof fbc === 'string' && fbcRegex.test(fbc)) {
       const fbcCreationTime = parseInt(fbc.split('.')[2], 10);
       if (fbcCreationTime < currentTime - 7 * 24 * 60 * 60 || fbcCreationTime > currentTime + 60) {
-        logger.warn('fbc-এর সময় সঠিক নয়, নতুন fbc তৈরি করা হচ্ছে', { fbc, origin });
+        logger.warn('Invalid fbc creation time, generating new fbc', { fbc, origin });
         validatedFbc = fbclid ? generateFbc(fbclid) : '';
       } else {
-        logger.info('fbc সঠিক', { fbc });
+        logger.info('fbc validated', { fbc });
       }
     } else {
       validatedFbc = fbclid ? generateFbc(fbclid) : '';
-      logger.info('fbc দেওয়া হয়নি বা ফরম্যাট সঠিক নয়', { fbc, origin });
+      logger.info('No valid fbc provided or invalid format', { fbc, origin });
     }
 
     return { fbp: validatedFbp, fbc: validatedFbc };
   };
 
-  // custom_data যাচাই
+  // Validate custom_data
   const validateCustomData = (custom_data) => {
     if (!custom_data || typeof custom_data !== 'object') {
-      logger.warn('custom_data সঠিক নয়, খালি অবজেক্ট ফেরত দেওয়া হচ্ছে', { origin });
+      logger.warn('Invalid custom_data, returning empty object', { origin });
       return {};
     }
     const validCustomData = {};
     if (typeof custom_data.value === 'number') {
       validCustomData.value = custom_data.value;
-      logger.info('custom_data-এর value সঠিক', { value: custom_data.value });
+      logger.info('custom_data value validated', { value: custom_data.value });
     }
     if (typeof custom_data.currency === 'string') {
       validCustomData.currency = custom_data.currency;
-      logger.info('custom_data-এর currency সঠিক', { currency: custom_data.currency });
+      logger.info('custom_data currency validated', { currency: custom_data.currency });
     }
     if (Array.isArray(custom_data.content_ids)) {
       validCustomData.content_ids = custom_data.content_ids;
-      logger.info('custom_data-এর content_ids সঠিক', { content_ids: custom_data.content_ids });
+      logger.info('custom_data content_ids validated', { content_ids: custom_data.content_ids });
     }
     if (typeof custom_data.content_type === 'string') {
       validCustomData.content_type = custom_data.content_type;
-      logger.info('custom_data-এর content_type সঠিক', { content_type: custom_data.content_type });
+      logger.info('custom_data content_type validated', { content_type: custom_data.content_type });
     }
     if (typeof custom_data.content_category === 'string') {
       validCustomData.content_category = custom_data.content_category;
-      logger.info('custom_data-এর content_category সঠিক', { content_category: custom_data.content_category });
+      logger.info('custom_data content_category validated', { content_category: custom_data.content_category });
     }
     return validCustomData;
   };
 
-  // ইভেন্ট ডেটা তৈরি
+  // Create event data
   const body = {
     data: [
       {
@@ -267,7 +280,7 @@ app.post('/api/track', async (req, res) => {
         event_id: typeof event_id === 'string' ? event_id : crypto.randomUUID(),
         user_data: {
           client_ip_address: typeof clientIp === 'string' ? clientIp : '',
-          client_user_agent: req.headers['user-agent'] || 'জানা নেই',
+          client_user_agent: req.headers['user-agent'] || 'unknown',
           ...validateUserData(user_data)
         },
         custom_data: validateCustomData(custom_data)
@@ -275,8 +288,8 @@ app.post('/api/track', async (req, res) => {
     ]
   };
 
-  // ফেসবুক API-তে পাঠানোর আগে ডেটা লগ করা
-  logger.info('ফেসবুক API-তে ইভেন্ট পাঠানোর জন্য তৈরি ডেটা', {
+  // Log event data before sending to Facebook
+  logger.info('Prepared event data for Facebook API', {
     event_name: body.data[0].event_name,
     event_id: body.data[0].event_id,
     event_time: body.data[0].event_time,
@@ -287,7 +300,7 @@ app.post('/api/track', async (req, res) => {
     clientIp
   });
 
-  // ফেসবুক API-তে ইভেন্ট পাঠানো
+  // Send event to Facebook API
   try {
     const fbRes = await fetch(
       `https://graph.facebook.com/v20.0/${pixel_id}/events?access_token=${access_token}`,
@@ -301,18 +314,18 @@ app.post('/api/track', async (req, res) => {
     const fbData = await fbRes.json();
 
     if (!fbRes.ok) {
-      logger.error('ফেসবুক API-তে ইভেন্ট পাঠাতে সমস্যা', {
+      logger.error('Failed to send event to Facebook API', {
         status: fbRes.status,
         response: fbData,
         event_name,
         origin,
         clientIp,
-        solution: 'pixel_id এবং access_token চেক করুন। ফেসবুক Events Manager থেকে নতুন টোকেন নিন।'
+        solution: 'Check pixel_id and access_token in clients.json. Generate a new token from Facebook Events Manager.'
       });
-      return res.status(500).json({ error: 'ফেসবুক API-তে সমস্যা', details: fbData });
+      return res.status(500).json({ error: 'Facebook API error', details: fbData });
     }
 
-    logger.info('ফেসবুক API-তে ইভেন্ট সফলভাবে পাঠানো হয়েছে', {
+    logger.info('Successfully sent event to Facebook API', {
       event_name,
       event_id,
       response: fbData,
@@ -321,25 +334,25 @@ app.post('/api/track', async (req, res) => {
     });
     return res.status(200).json({ success: true, data: fbData });
   } catch (error) {
-    logger.error('ফেসবুক API-তে ইভেন্ট পাঠাতে ত্রুটি', {
+    logger.error('Error sending event to Facebook API', {
       error: error.message,
       event_name,
       origin,
       clientIp,
-      solution: 'ইন্টারনেট সংযোগ বা ফেসবুক API সার্ভার চেক করুন।'
+      solution: 'Check internet connection or Facebook API status.'
     });
-    return res.status(500).json({ error: 'সার্ভারে ত্রুটি', details: error.message });
+    return res.status(500).json({ error: 'Server error', details: error.message });
   }
 });
 
-// ক্লায়েন্ট কনফিগারেশন যাচাই ফাংশন
+// Helper function to get client configuration
 function getClientConfig(origin, apiKey) {
   if (!clients || clients.length === 0) {
-    throw new Error('কোনো ক্লায়েন্ট কনফিগার করা নেই। clients.json ফাইল চেক করুন।');
+    throw new Error('No clients configured. Check clients.json.');
   }
   const client = clients.find(c => c.origin === origin && c.api_key === apiKey);
   if (!client) {
-    throw new Error(`অরিজিন ${origin} বা API কী ${apiKey} সঠিক নয়। clients.json চেক করুন।`);
+    throw new Error(`Invalid origin ${origin} or API key ${apiKey}. Check clients.json.`);
   }
   return {
     pixel_id: client.pixel_id,
@@ -347,14 +360,14 @@ function getClientConfig(origin, apiKey) {
   };
 }
 
-// হেলথ চেক এন্ডপয়েন্ট
+// Health check endpoint
 app.get('/health', (req, res) => {
-  logger.info('হেলথ চেক রিকোয়েস্ট পাওয়া গেছে');
-  res.status(200).json({ status: 'সার্ভার ঠিক আছে', timestamp: new Date().toISOString() });
+  logger.info('Health check request received');
+  res.status(200).json({ status: 'Server is running', timestamp: new Date().toISOString() });
 });
 
-// সার্ভার শুরু
+// Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  logger.info(`সার্ভার চলছে পোর্ট ${PORT}-এ`);
+  logger.info(`Server running on port ${PORT}`);
 });
