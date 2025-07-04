@@ -1,0 +1,30 @@
+[
+  {
+    "client_id": "client_001",
+    "origin": "https://fb-kamil.surge.sh",
+    "pixel_id": "1395230681787715",
+    "access_token": "YOUR_ACCESS_TOKEN_1",
+    "api_key": "abc123xyz"
+  },
+  {
+    "client_id": "client_002",
+    "origin": "https://rdstrading007.com",
+    "pixel_id": "987654321",
+    "access_token": "YOUR_ACCESS_TOKEN_2",
+    "api_key": "xyz789abc"
+  },
+  {
+    "client_id": "client_003",
+    "origin": "https://fp-solution.vercel.app",
+    "pixel_id": "123456789",
+    "access_token": "YOUR_ACCESS_TOKEN_3",
+    "api_key": "def456ghi"
+  },
+  {
+    "client_id": "client_004",
+    "origin": "http://localhost:3000",
+    "pixel_id": "456789123",
+    "access_token": "YOUR_ACCESS_TOKEN_4",
+    "api_key": "ghi789jkl"
+  }
+]

@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Client Website</title>
+  <script data-tracking-config='{"pixel_id":"1395230681787715","api_url":"https://your-api-endpoint.com/api/track","api_key":"abc123xyz"}' src="tracking.js"></script>
+</head>
+<body>
+  <h1>Welcome to Client Website</h1>
+  <button onclick="trackEvent('Purchase', { value: 99.99, currency: 'USD', content_ids: ['product_123'], content_type: 'product', content_category: 'electronics' })">Track Purchase</button>
+  <noscript>
+    <img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=1395230681787715&ev=PageView&noscript=1"/>
+  </noscript>
+</body>
+</html>
