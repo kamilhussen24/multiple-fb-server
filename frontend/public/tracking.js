@@ -259,57 +259,5 @@ window.addEventListener('DOMContentLoaded', () => {
     logError('Error in PageView event handler', { error: error.message });
   }
 });
-
-// Scrolling and timing tracking
-document.addEventListener('DOMContentLoaded', () => {
-  try {
-    // Scrolling tracking
-    const scrollThresholds = [25, 50, 75, 100];
-    const trackedScrolls = new Set();
-
-    window.addEventListener('scroll', () => {
-      try {
-        const scrollPercent = Math.floor((window.scrollY / (document.documentElement.scrollHeight - window.innerHeight)) * 100);
-        scrollThresholds.forEach(threshold => {
-          if (scrollPercent >= threshold && !trackedScrolls.has(threshold)) {
-            trackedScrolls.add(threshold);
-            trackEvent(`Scroll${threshold}Percent`, {
-              content_ids: [`scroll_${threshold}`],
-              content_type: 'scroll',
-              content_category: 'page'
-            });
-          }
-        });
-      } catch (error) {
-        logError('Error in scroll event handler', { error: error.message });
-      }
-    });
-
-    // Timing tracking
-    const timeThresholds = [10, 30, 60];
-    let startTime = Date.now();
-
-    setInterval(() => {
-      try {
-        const timeSpent = Math.floor((Date.now() - startTime) / 1000);
-        timeThresholds.forEach(threshold => {
-          if (timeSpent >= threshold && !window[`trackedTime${threshold}`]) {
-            window[`trackedTime${threshold}`] = true;
-            trackEvent(`TimeSpent${threshold}Seconds`, {
-              content_ids: [`time_${threshold}`],
-              content_type: 'time',
-              content_category: 'page'
-            });
-          }
-        });
-      } catch (error) {
-        logError('Error in timing event handler', { error: error.message });
-      }
-    }, 1000);
-  } catch (error) {
-    logError('Error in scroll/timing event handler', { error: error.message });
-  }
-});
-
 // Expose trackEvent globally
 window.trackEvent = trackEvent;
