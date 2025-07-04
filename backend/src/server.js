@@ -8,7 +8,7 @@ const rateLimit = require('express-rate-limit');
 
 const app = express();
 
-// Setup logging
+// Setup logging (Console only for Vercel)
 const logger = winston.createLogger({
   level: 'info',
   format: winston.format.combine(
@@ -16,9 +16,7 @@ const logger = winston.createLogger({
     winston.format.json()
   ),
   transports: [
-    new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
-    new winston.transports.File({ filename: 'logs/app.log' }),
-    new winston.transports.Console()
+    new winston.transports.Console() // Only log to console
   ]
 });
 
@@ -46,18 +44,6 @@ app.use(cors({
   methods: ['POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'X-API-Key']
 }));
-
-// Helper function to get client configuration
-function getClientConfig(origin, apiKey) {
-  const client = clients.find(c => c.origin === origin && c.api_key === apiKey);
-  if (!client) {
-    throw new Error(`Invalid client: Origin ${origin} or API Key not found`);
-  }
-  return {
-    pixel_id: client.pixel_id,
-    access_token: client.access_token
-  };
-}
 
 // Request logging and validation middleware
 app.use((req, res, next) => {
@@ -263,6 +249,18 @@ app.post('/api/track', async (req, res) => {
     return res.status(500).json({ error: 'Internal server error', details: error.message });
   }
 });
+
+// Helper function to get client configuration
+function getClientConfig(origin, apiKey) {
+  const client = clients.find(c => c.origin === origin && c.api_key === apiKey);
+  if (!client) {
+    throw new Error(`Invalid client: Origin ${origin} or API Key not found`);
+  }
+  return {
+    pixel_id: client.pixel_id,
+    access_token: client.access_token
+  };
+}
 
 // Health check endpoint
 app.get('/health', (req, res) => {
