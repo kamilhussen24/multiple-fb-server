@@ -89,6 +89,19 @@ app.use((req, res, next) => {
   next();
 });
 
+// Info logging endpoint for client-side info
+app.post('/api/log-info', (req, res) => {
+  const { message, details, event_name, origin } = req.body;
+  logger.info(`✅ Client-side info reported`, {
+    message,
+    details,
+    event_name: event_name || 'unknown',
+    origin: origin || req.headers.origin || 'unknown',
+    clientIp: req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown'
+  });
+  res.status(200).json({ status: 'Info logged' });
+});
+
 // Error logging endpoint for client-side errors
 app.post('/api/log-error', (req, res) => {
   const { message, details, event_name, origin } = req.body;
