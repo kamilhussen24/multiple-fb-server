@@ -8,6 +8,9 @@ const rateLimit = require('express-rate-limit');
 
 const app = express();
 
+// Enable trust proxy for Vercel
+app.set('trust proxy', 1);
+
 // Setup logging (Console only for Vercel)
 const logger = winston.createLogger({
   level: 'info',
@@ -27,7 +30,7 @@ try {
   logger.info('Successfully loaded clients.json');
 } catch (error) {
   logger.error(`Failed to load clients.json: ${error.message}`);
-  clients = []; // Fallback to empty array to prevent server crash
+  clients = [];
 }
 
 // Rate limiting
@@ -42,11 +45,17 @@ app.use(limiter);
 app.use(express.json());
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || clients.some(c => c.origin === origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
+    if (!origin) {
+      logger.warn(`CORS: No origin provided`);
+      return callback(null, true); // Allow requests with no origin (e.g., Postman)
     }
+    const client = clients.find(c => c.origin === origin);
+    if (client) {
+      logger.info(`CORS: Allowed origin ${origin}`);
+      return callback(null, true);
+    }
+    logger.error(`CORS: Blocked origin ${origin}`);
+    return callback(new Error(`CORS: Origin ${origin} not allowed`));
   },
   methods: ['POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'X-API-Key']
@@ -264,7 +273,7 @@ function getClientConfig(origin, apiKey) {
   }
   const client = clients.find(c => c.origin === origin && c.api_key === apiKey);
   if (!client) {
-    throw new Error(`Invalid client: Origin ${origin} or API Key not found`);
+    throw new Error(`Invalid client: Origin ${origin} or API Key ${apiKey} not found`);
   }
   return {
     pixel_id: client.pixel_id,
