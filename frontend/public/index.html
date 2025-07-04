@@ -1,14 +1,112 @@
+
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Client Website</title>
-  <script data-tracking-config='{"pixel_id":"1211731600730925","api_url":"https://multiple-fb-server.vercel.app/api/track","api_key":"kamilhussen24"}' src="tracking.js"></script>
-</head>
-<body>
-  <h1>Welcome to Client Website</h1>
-  <button onclick="trackEvent('All', { value: 99.99, currency: 'USD', content_ids: ['product_123'], content_type: 'product', content_category: 'electronics' })">Track Purchase</button>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Button Showcase with Facebook Pixel Tracking</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Custom Tailwind configuration -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#3B82F6',
+            secondary: '#10B981',
+            accent: '#F59E0B',
+            danger: '#EF4444',
+          },
+        },
+      },
+    };
+  </script>
+  <!-- Tracking.js for Facebook Pixel -->
+  <script data-tracking-config='{"pixel_id":"1211731600730925","api_url":"https://multiple-fb-server.vercel.app/api/track","api_key":"kamilhussen24"}' src="/tracking.js" async></script>
+  <!-- Noscript fallback for Facebook Pixel -->
   <noscript>
-    <img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=1211731600730925&ev=PageView&noscript=1"/>
+    <img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=YOUR_PIXEL_ID&ev=PageView&noscript=1"/>
   </noscript>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col items-center justify-center p-4">
+  <div class="max-w-4xl w-full bg-white rounded-lg shadow-lg p-6">
+    <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">Button Showcase with Tracking</h1>
+    
+    <!-- Normal Button -->
+    <div class="mb-6">
+      <h2 class="text-xl font-semibold text-gray-700 mb-2">Normal Button</h2>
+      <button 
+        onclick="trackEvent('ViewContent', { content_ids: ['content_001'], content_type: 'page', content_category: 'general' })"
+        class="bg-primary text-white px-4 py-2 rounded-md hover:bg-blue-700 transition duration-300"
+      >
+        View Content
+      </button>
+      <p class="text-gray-600 mt-2">A simple button for general actions, tracks a 'ViewContent' event.</p>
+    </div>
+
+    <!-- Purchase Button -->
+    <div class="mb-6">
+      <h2 class="text-xl font-semibold text-gray-700 mb-2">Purchase Button</h2>
+      <button 
+        onclick="trackEvent('Purchase', { value: 49.99, currency: 'USD', content_ids: ['prod_001'], content_type: 'product', content_category: 'clothing' })"
+        class="bg-secondary text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition duration-300"
+      >
+        Buy Now
+      </button>
+      <p class="text-gray-600 mt-2">A prominent purchase button, tracks a 'Purchase' event with value and currency.</p>
+    </div>
+
+    <!-- Call-to-Action (CTA) Button -->
+    <div class="mb-6">
+      <h2 class="text-xl font-semibold text-gray-700 mb-2">CTA Button</h2>
+      <button 
+        onclick="trackEvent('AddToCart', { content_ids: ['prod_002'], content_type: 'product', content_category: 'electronics' })"
+        class="bg-accent text-white px-6 py-3 rounded-full font-bold hover:bg-yellow-600 transition duration-300"
+      >
+        Add to Cart
+      </button>
+      <p class="text-gray-600 mt-2">A bold CTA button with rounded edges, tracks an 'AddToCart' event.</p>
+    </div>
+
+    <!-- Secondary Button -->
+    <div class="mb-6">
+      <h2 class="text-xl font-semibold text-gray-700 mb-2">Secondary Button</h2>
+      <button 
+        onclick="trackEvent('Contact', { content_category: 'support' })"
+        class="border-2 border-primary text-primary px-4 py-2 rounded-md hover:bg-primary hover:text-white transition duration-300"
+      >
+        Contact Us
+      </button>
+      <p class="text-gray-600 mt-2">A secondary button with border styling, tracks a 'Contact' event.</p>
+    </div>
+
+    <!-- Icon Button -->
+    <div class="mb-6">
+      <h2 class="text-xl font-semibold text-gray-700 mb-2">Icon Button</h2>
+      <button 
+        onclick="trackEvent('Search', { content_category: 'search' })"
+        class="bg-gray-800 text-white px-4 py-2 rounded-md flex items-center space-x-2 hover:bg-gray-900 transition duration-300"
+      >
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+        </svg>
+        <span>Search</span>
+      </button>
+      <p class="text-gray-600 mt-2">A button with an icon, tracks a 'Search' event.</p>
+    </div>
+
+    <!-- Danger Button -->
+    <div class="mb-6">
+      <h2 class="text-xl font-semibold text-gray-700 mb-2">Danger Button</h2>
+      <button 
+        onclick="trackEvent('CancelAction', { content_category: 'cancellation' })"
+        class="bg-danger text-white px-4 py-2 rounded-md hover:bg-red-600 transition duration-300"
+      >
+        Cancel
+      </button>
+      <p class="text-gray-600 mt-2">A danger button for critical actions, tracks a 'CancelAction' event.</p>
+    </div>
+  </div>
 </body>
 </html>
