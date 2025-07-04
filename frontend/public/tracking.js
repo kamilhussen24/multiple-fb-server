@@ -13,10 +13,10 @@ function loadConfig() {
       const dynamicConfig = JSON.parse(scriptTag.dataset.trackingConfig);
       Object.assign(config, dynamicConfig);
     } catch (error) {
-      logError('Error parsing tracking config', { error: error.message });
+      logError('❌ Error parsing tracking config', { error: error.message });
     }
   } else {
-    logError('No tracking config found in script tag');
+    logError('❌ No tracking config found in script tag');
   }
 }
 
@@ -49,7 +49,7 @@ if (config.pixel_id !== 'YOUR_PIXEL_ID') {
   fbq('init', config.pixel_id);
   fbq('track', 'PageView');
 } else {
-  logError('Pixel ID not provided. Skipping Pixel initialization.');
+  logError('❌ Pixel ID not provided. Skipping Pixel initialization.');
 }
 
 // Helper function to get cookie
@@ -59,7 +59,7 @@ function getCookieValue(name) {
   if (value && (name === '_fbp' || name === '_fbc')) {
     const regex = name === '_fbp' ? /^fb\.\d+\.\d+\.\d+$/ : /^fb\.\d+\.\d+\..+$/;
     if (!regex.test(value)) {
-      logError(`Invalid ${name} cookie format`, { value });
+      logError(`❌ Invalid ${name} cookie format`, { value });
       const newValue = name === '_fbp' ? generateFbp() : '';
       if (name === '_fbp') {
         document.cookie = `${name}=${newValue}; path=/; max-age=7776000; SameSite=Lax; Secure`;
@@ -71,7 +71,7 @@ function getCookieValue(name) {
         const creationTime = parseInt(fbcParts[2], 10);
         const currentTime = Math.floor(Date.now() / 1000);
         if (isNaN(creationTime) || creationTime < currentTime - 7 * 24 * 60 * 60 || creationTime > currentTime + 60) {
-          logError(`Invalid _fbc creation time`, { creationTime });
+          logError(`❌ Invalid _fbc creation time`, { creationTime });
           return '';
         }
       }
@@ -88,6 +88,7 @@ function generateFbp() {
   const creationTime = Math.floor(Date.now() / 1000);
   const randomNumber = Math.floor(Math.random() * 10000000000);
   const fbp = `${version}.${subdomainIndex}.${creationTime}.${randomNumber}`;
+  logError('✅ Generated new fbp', { fbp });
   return fbp;
 }
 
@@ -97,6 +98,7 @@ function generateFbc(fbclid) {
   const subdomainIndex = 1;
   const creationTime = Math.floor(Date.now() / 1000);
   const fbc = `${version}.${subdomainIndex}.${creationTime}.${fbclid}`;
+  logError('✅ Generated new fbc', { fbc });
   return fbc;
 }
 
@@ -107,12 +109,13 @@ function validateFbp(fbp) {
     const creationTime = parseInt(fbp.split('.')[2], 10);
     const currentTime = Math.floor(Date.now() / 1000);
     if (creationTime < currentTime - 7 * 24 * 60 * 60 || creationTime > currentTime + 60) {
-      logError('Invalid fbp creation time, generating new fbp', { fbp });
+      logError('❌ Invalid fbp creation time, generating new fbp', { fbp });
       return generateFbp();
     }
+    logError('✅ fbp validated', { fbp });
     return fbp;
   }
-  logError('Invalid fbp format, generating new fbp', { fbp });
+  logError('❌ Invalid fbp format, generating new fbp', { fbp });
   return generateFbp();
 }
 
@@ -123,12 +126,15 @@ function validateFbc(fbc, fbclid) {
   if (fbc && fbcRegex.test(fbc)) {
     const creationTime = parseInt(fbc.split('.')[2], 10);
     if (isNaN(creationTime) || creationTime < currentTime - 7 * 24 * 60 * 60 || creationTime > currentTime + 60) {
-      logError('Invalid fbc creation time, generating new fbc', { fbc });
+      logError('❌ Invalid fbc creation time, generating new fbc', { fbc });
       return fbclid ? generateFbc(fbclid) : '';
     }
+    logError('✅ fbc validated', { fbc });
     return fbc;
   }
-  return fbclid ? generateFbc(fbclid) : '';
+  const newFbc = fbclid ? generateFbc(fbclid) : '';
+  logError('✅ No valid fbc provided or invalid format', { fbc, newFbc });
+  return newFbc;
 }
 
 // Helper function to generate unique event ID
@@ -154,8 +160,10 @@ async function trackEvent(event_name, options = {}) {
     // Validate event_time
     let event_time = Math.floor(Date.now() / 1000);
     if (event_time < currentTime - 7 * 24 * 60 * 60 || event_time > currentTime + 60) {
-      logError('Invalid event_time, using current time', { event_name, event_time });
+      logError('❌ Invalid event_time, using current time', { event_name, event_time });
       event_time = currentTime;
+    } else {
+      logError('✅ Event time validated', { event_name, event_time });
     }
 
     const payload = {
@@ -188,7 +196,7 @@ async function trackEvent(event_name, options = {}) {
         ...custom_data
       });
     } else {
-      logError('Facebook Pixel not initialized', { event_name });
+      logError('❌ Facebook Pixel not initialized', { event_name });
     }
 
     const response = await fetch(config.api_url, {
@@ -209,7 +217,7 @@ async function trackEvent(event_name, options = {}) {
       }, 500); // Reduced delay for better UX
     }
   } catch (error) {
-    logError(`Error in trackEvent for ${event_name}`, { error: error.message });
+    logError(`❌ Error in trackEvent for ${event_name}`, { error: error.message });
   }
 }
 
@@ -218,7 +226,7 @@ window.addEventListener('DOMContentLoaded', () => {
   try {
     let event_time = Math.floor(Date.now() / 1000);
     if (event_time < currentTime - 7 * 24 * 60 * 60 || event_time > currentTime + 60) {
-      logError('Invalid event_time for PageView, using current time', { event_time });
+      logError('❌ Invalid event_time for PageView, using current time', { event_time });
       event_time = currentTime;
     }
 
@@ -253,10 +261,10 @@ window.addEventListener('DOMContentLoaded', () => {
         }
       })
       .catch((error) => {
-        logError('Error sending PageView event to server', { error: error.message });
+        logError('❌ Error sending PageView event to server', { error: error.message });
       });
   } catch (error) {
-    logError('Error in PageView event handler', { error: error.message });
+    logError('❌ Error in PageView event handler', { error: error.message });
   }
 });
 
@@ -281,7 +289,7 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         });
       } catch (error) {
-        logError('Error in scroll event handler', { error: error.message });
+        logError('❌ Error in scroll event handler', { error: error.message });
       }
     });
 
@@ -303,11 +311,11 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         });
       } catch (error) {
-        logError('Error in timing event handler', { error: error.message });
+        logError('❌ Error in timing event handler', { error: error.message });
       }
     }, 1000);
   } catch (error) {
-    logError('Error in scroll/timing event handler', { error: error.message });
+    logError('❌ Error in scroll/timing event handler', { error: error.message });
   }
 });
 
