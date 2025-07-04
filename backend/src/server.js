@@ -16,12 +16,19 @@ const logger = winston.createLogger({
     winston.format.json()
   ),
   transports: [
-    new winston.transports.Console() // Only log to console
+    new winston.transports.Console()
   ]
 });
 
 // Load clients from JSON file
-const clients = JSON.parse(fs.readFileSync('src/clients.json', 'utf8'));
+let clients;
+try {
+  clients = JSON.parse(fs.readFileSync('backend/src/clients.json', 'utf8'));
+  logger.info('Successfully loaded clients.json');
+} catch (error) {
+  logger.error(`Failed to load clients.json: ${error.message}`);
+  clients = []; // Fallback to empty array to prevent server crash
+}
 
 // Rate limiting
 const limiter = rateLimit({
@@ -252,6 +259,9 @@ app.post('/api/track', async (req, res) => {
 
 // Helper function to get client configuration
 function getClientConfig(origin, apiKey) {
+  if (!clients || clients.length === 0) {
+    throw new Error('No clients configured. Please check clients.json');
+  }
   const client = clients.find(c => c.origin === origin && c.api_key === apiKey);
   if (!client) {
     throw new Error(`Invalid client: Origin ${origin} or API Key not found`);
